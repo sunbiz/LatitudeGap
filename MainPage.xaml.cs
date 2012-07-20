@@ -17,22 +17,26 @@ namespace LatitudeGap
 {
     public partial class MainPage : PhoneApplicationPage
     {
-
+        IsolatedStorageSettings isoSettings = IsolatedStorageSettings.ApplicationSettings;
         GeoCoordinateWatcher watcher;
 
         private const String CURRENT_LOCATION = "https://www.googleapis.com/latitude/v1/currentLocation";
 
         private const String DEVICE_URL = "https://accounts.google.com/o/oauth2/device/code";
         private const String TOKEN_URL = "https://accounts.google.com/o/oauth2/token";
-        private const String CLIENT_ID = "<add your own client_id>";
-        private const String CLIENT_SECRET = "<add your own client_secret>";
+        private const String CLIENT_ID = "<your_client_id>";
+        private const String CLIENT_SECRET = "<your_client_secret>";
         private const String SCOPE = "https://www.googleapis.com/auth/latitude.all.best";
         private const String APPROVAL_URL = "https://accounts.google.com/o/oauth2/device/approval";
 
         // Constructor
         public MainPage()
         {
+            if (!isoSettings.Contains("Enablelocation"))
+                isoSettings.Add("Enablelocation", true);
+            
             InitializeComponent();
+
             if (watcher == null)
             {
                 watcher = new GeoCoordinateWatcher(GeoPositionAccuracy.Default);
@@ -40,7 +44,16 @@ namespace LatitudeGap
                 watcher.StatusChanged += new EventHandler<GeoPositionStatusChangedEventArgs>(watcher_StatusChanged);
                 watcher.PositionChanged += new EventHandler<GeoPositionChangedEventArgs<GeoCoordinate>>(watcher_PositionChanged);
             }
-            watcher.Start();
+            
+            if ((bool)isoSettings["Enablelocation"])
+            {
+                watcher.Start();
+            }
+            else
+            {
+                map.Visibility = System.Windows.Visibility.Collapsed;
+                MessageBox.Show("Please enable Location services from settings to view and report location");
+            }
         }
 
         void watcher_StatusChanged(object sender, GeoPositionStatusChangedEventArgs e)
@@ -48,7 +61,7 @@ namespace LatitudeGap
             switch (e.Status)
             {
                 case GeoPositionStatus.Disabled:
-                    MessageBox.Show("Location Service is not enabled on the device");
+                    MessageBox.Show("Location Service is not enabled on the device. Please enable to use application");
                     break;
 
                 case GeoPositionStatus.NoData:
@@ -84,7 +97,7 @@ namespace LatitudeGap
             this.map.SetView(watcher.Position.Location, 15.0);
 
             object access_token;
-            if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("access_token", out access_token))
+            if (isoSettings.TryGetValue("access_token", out access_token))
             {
                 string latitude = e.Position.Location.Latitude.ToString("0.0000");
                 string longitude = e.Position.Location.Longitude.ToString("0.0000");
@@ -101,7 +114,7 @@ namespace LatitudeGap
         {
             string latitudeData = "{ \"data\": { \"kind\":\"latitude#location\", \"latitude\":" + latitude + ", \"longitude\":" + longitude + "}}";
             object access_token;
-            if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("access_token", out access_token))
+            if (isoSettings.TryGetValue("access_token", out access_token))
             {
                 RestClient client = new RestClient(CURRENT_LOCATION);
                 RestRequest request = new RestRequest(Method.POST);
@@ -117,7 +130,7 @@ namespace LatitudeGap
                     else if (response.StatusCode == HttpStatusCode.Unauthorized)
                     {
                         object refresh_token;
-                        if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("refresh_token", out refresh_token))
+                        if (isoSettings.TryGetValue("refresh_token", out refresh_token))
                         {
                             RestClient tokenClient = new RestClient(TOKEN_URL);
                             RestRequest req = new RestRequest(Method.POST);
@@ -134,8 +147,9 @@ namespace LatitudeGap
                                     {
                                         var ser = new DataContractJsonSerializer(typeof(TokenResponse));
                                         TokenResponse obj = (TokenResponse)ser.ReadObject(ms2);
-                                        IsolatedStorageSettings.ApplicationSettings["access_token"] = obj.access_token;
-                                        IsolatedStorageSettings.ApplicationSettings["refresh_token"] = obj.refresh_token;
+                                        isoSettings["access_token"] = obj.access_token;
+                                        isoSettings["refresh_token"] = obj.refresh_token;
+                                        isoSettings.Save();
                                     }
                                 }
                             });
@@ -165,7 +179,8 @@ namespace LatitudeGap
                     {
                         var ser = new DataContractJsonSerializer(typeof(DeviceResponse));
                         DeviceResponse obj = (DeviceResponse)ser.ReadObject(ms);
-                        IsolatedStorageSettings.ApplicationSettings["device_code"] = obj.device_code;
+                        isoSettings["device_code"] = obj.device_code;
+                        isoSettings.Save();
                         userCodeField.Visibility = System.Windows.Visibility.Visible;
                         userCodeField.Text = obj.user_code;
                         userCodeLabel.Visibility = System.Windows.Visibility.Visible;
@@ -179,7 +194,7 @@ namespace LatitudeGap
         private void tokenButton_Click(object sender, System.Windows.RoutedEventArgs e)
         {
             object deviceCode;
-            if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("device_code", out deviceCode))
+            if (isoSettings.TryGetValue("device_code", out deviceCode))
             {
                 webBrowser.Visibility = System.Windows.Visibility.Collapsed;
                 map.Visibility = System.Windows.Visibility.Visible;
@@ -198,8 +213,9 @@ namespace LatitudeGap
                         {
                             var ser = new DataContractJsonSerializer(typeof(TokenResponse));
                             TokenResponse obj = (TokenResponse)ser.ReadObject(ms);
-                            IsolatedStorageSettings.ApplicationSettings["access_token"] = obj.access_token;
-                            IsolatedStorageSettings.ApplicationSettings["refresh_token"] = obj.refresh_token;
+                            isoSettings["access_token"] = obj.access_token;
+                            isoSettings["refresh_token"] = obj.refresh_token;
+                            isoSettings.Save();
                         }
                     }
                 });
@@ -222,10 +238,24 @@ namespace LatitudeGap
 
         private void refreshButton_Click(object sender, EventArgs e)
         {
-            ((ApplicationBarIconButton)ApplicationBar.Buttons[0]).IsEnabled = false;
-            watcher.Stop();
-            watcher.Start();
-            ((ApplicationBarIconButton)ApplicationBar.Buttons[0]).IsEnabled = true;
+            if ((bool)isoSettings["Enablelocation"])
+            {
+                map.Visibility = System.Windows.Visibility.Visible;
+                ((ApplicationBarIconButton)ApplicationBar.Buttons[0]).IsEnabled = false;
+                watcher.Stop();
+                watcher.Start();
+                ((ApplicationBarIconButton)ApplicationBar.Buttons[0]).IsEnabled = true;
+            }
+            else
+            {
+                map.Visibility = System.Windows.Visibility.Collapsed;
+                MessageBox.Show("Please enable Location services from settings to view and report location");
+            }
+        }
+
+        private void settingsButton_Click(object sender, EventArgs e)
+        {
+            NavigationService.Navigate(new Uri("/SettingsPage.xaml", UriKind.Relative));
         }
     }
 

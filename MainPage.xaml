@@ -44,6 +44,7 @@
             <shell:ApplicationBarIconButton IconUri="/icons/appbar.refresh.rest.png" Text="refresh" x:Name="refreshButton" Click="refreshButton_Click" />
             <shell:ApplicationBar.MenuItems>
                 <shell:ApplicationBarMenuItem Text="login to google latitude" x:Name="loginButton" Click="loginButton_Click" />
+                <shell:ApplicationBarMenuItem Text="settings" x:Name="settingsButton" Click="settingsButton_Click" />
             </shell:ApplicationBar.MenuItems>
         </shell:ApplicationBar>
     </phone:PhoneApplicationPage.ApplicationBar>
